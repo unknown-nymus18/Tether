@@ -67,7 +67,6 @@ class _MouseDisplayState extends State<MouseDisplay> {
     if (_isConnected) {
       _channel.sink.add(jsonEncode(command));
     }
-
     print(command);
   }
 

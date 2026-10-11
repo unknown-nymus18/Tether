@@ -1,4 +1,4 @@
-import 'package:connect/Pages/mouse_display.dart';
+import 'package:Tether/Pages/mouse_display.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
