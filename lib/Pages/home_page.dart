@@ -26,7 +26,7 @@ class _HomePageState extends State<HomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Connect",
+                    "Tether",
                     style: TextStyle(
                       fontSize: 23,
                       // color: Color.rgb(61, 218, 150),
