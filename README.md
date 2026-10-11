@@ -1,16 +1,26 @@
-# connect
+# Tether
 
-A new Flutter project.
+Tether turns your phone into a wireless controller for your laptop. Use it as a
+mouse, a keyboard, or a game controller, with no extra hardware.
 
-## Getting Started
+## How it works
 
-This project is a starting point for a Flutter application.
+The laptop runs a desktop app built with Avalonia (C#) that hosts a WebSocket
+server. The phone connects to it, and the input you make on the phone (touch
+movement, taps, key presses, game controls) is sent to the laptop in real time.
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- **Mouse**: use your phone screen as a touchpad
+- **Keyboard**: type on your laptop from your phone
+- **Game controller**: use your phone as a gamepad
+- **Wireless**: phone and laptop communicate over WebSocket
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Tech stack
+
+- Desktop app: C#, Avalonia
+- Communication: WebSocket
+
+## Status
+
+Final year project, in development.
