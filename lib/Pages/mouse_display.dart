@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:verification_code_field/verification_code_field.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class MouseDisplay extends StatefulWidget {
@@ -15,8 +16,12 @@ class MouseDisplay extends StatefulWidget {
 class _MouseDisplayState extends State<MouseDisplay> {
   late final WebSocketChannel _channel;
   StreamSubscription<dynamic>? _subscription;
+  final VerificationCodeController _codeController =
+      VerificationCodeController();
   bool _isConnected = false;
   bool _connectionFailed = false;
+  bool _isVerified = false;
+  bool _verificationFailed = false;
 
   double sensitivity = 1.0;
 
@@ -35,14 +40,17 @@ class _MouseDisplayState extends State<MouseDisplay> {
       _channel.ready
           .then<void>((_) {
             _isConnected = true;
+            if (mounted) setState(() {});
             _subscription = _channel.stream.listen(
-              (message) => debugPrint('Server: $message'),
+              _handleServerMessage,
               onError: (Object error) {
                 _isConnected = false;
                 debugPrint('WebSocket error: $error');
+                if (mounted) setState(() {});
               },
               onDone: () {
                 _isConnected = false;
+                if (mounted) setState(() {});
               },
             );
           })
@@ -59,8 +67,36 @@ class _MouseDisplayState extends State<MouseDisplay> {
   void dispose() {
     _isConnected = false;
     unawaited(_subscription?.cancel());
+    _codeController.dispose();
     _channel.sink.close();
     super.dispose();
+  }
+
+  void _handleServerMessage(dynamic message) {
+    debugPrint('Server: $message');
+    try {
+      final response = jsonDecode(message as String);
+      if (response is Map<String, dynamic> &&
+          response.containsKey('server') &&
+          mounted) {
+        setState(() {
+          _isVerified = response['server'] == 'verified';
+          _verificationFailed = !_isVerified;
+        });
+      }
+    } on FormatException {
+      debugPrint('Invalid server response: $message');
+    } on TypeError {
+      debugPrint('Invalid server response: $message');
+    }
+  }
+
+  void _submitCode() {
+    final code = _codeController.text.trim();
+    if (!_isConnected || code.isEmpty) return;
+
+    _channel.sink.add(jsonEncode({'type': 'verify', 'code': code}));
+    setState(() => _verificationFailed = false);
   }
 
   void _sendCommand(Map<String, Object> command) {
@@ -87,95 +123,157 @@ class _MouseDisplayState extends State<MouseDisplay> {
                 ),
                 const SizedBox(height: 12),
               ],
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () =>
-                            _sendCommand({'type': 'click', 'button': 'left'}),
-                        onPanUpdate: (details) => _sendCommand({
-                          'type': 'move',
-                          'dx': details.delta.dx * sensitivity,
-                          'dy': details.delta.dy * sensitivity,
-                        }),
-                        child: Container(
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            borderRadius: BorderRadius.circular(13),
-                            // border: Border.all(color: _accent, width: 1),
-                          ),
-                          child: const Text(
-                            'Slide a finger to move the\ncursor\nTap to click',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: _mutedText,
-                              fontSize: 16,
-                              height: 1.5,
+              if (!_isVerified)
+                Expanded(child: _buildCodeEntry())
+              else
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              _sendCommand({'type': 'click', 'button': 'left'}),
+                          onPanUpdate: (details) => _sendCommand({
+                            'type': 'move',
+                            'dx': details.delta.dx * sensitivity,
+                            'dy': details.delta.dy * sensitivity,
+                          }),
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _surface,
+                              borderRadius: BorderRadius.circular(13),
+                              // border: Border.all(color: _accent, width: 1),
+                            ),
+                            child: const Text(
+                              'Slide a finger to move the\ncursor\nTap to click',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _mutedText,
+                                fontSize: 16,
+                                height: 1.5,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 46,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onVerticalDragUpdate: (details) => _sendCommand({
-                          'type': 'scroll',
-                          'dy': details.delta.dy * sensitivity,
-                        }),
-                        onTap: () {
-                          _sendCommand({'type': 'click', 'button': 'middle'});
-                        },
-                        child: Container(
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: _outline),
-                          ),
-                          child: const RotatedBox(
-                            quarterTurns: 1,
-                            child: Text(
-                              'Scroll',
-                              style: TextStyle(color: _mutedText, fontSize: 13),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 46,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onVerticalDragUpdate: (details) => _sendCommand({
+                            'type': 'scroll',
+                            'dy': details.delta.dy * sensitivity,
+                          }),
+                          onTap: () {
+                            _sendCommand({'type': 'click', 'button': 'middle'});
+                          },
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _surface,
+                              borderRadius: BorderRadius.circular(15),
+                              border: Border.all(color: _outline),
+                            ),
+                            child: const RotatedBox(
+                              quarterTurns: 1,
+                              child: Text(
+                                'Scroll',
+                                style: TextStyle(
+                                  color: _mutedText,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 64,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _ClickButton(
-                        label: 'Left click',
-                        onPressed: () =>
-                            _sendCommand({'type': 'click', 'button': 'left'}),
+              if (_isVerified) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 64,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _ClickButton(
+                          label: 'Left click',
+                          onPressed: () =>
+                              _sendCommand({'type': 'click', 'button': 'left'}),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ClickButton(
-                        label: 'Right click',
-                        onPressed: () =>
-                            _sendCommand({'type': 'click', 'button': 'right'}),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ClickButton(
+                          label: 'Right click',
+                          onPressed: () => _sendCommand({
+                            'type': 'click',
+                            'button': 'right',
+                          }),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCodeEntry() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            VerificationCodeField(
+              fieldSize: 50,
+              clearOnTap: false,
+              autoFocus: true,
+              controller: _codeController,
+              codeDigit: CodeDigit.four,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Color.fromRGBO(61, 218, 150, 1)),
+              ),
+              onSubmit: (_) => _submitCode(),
+              enabled: _isConnected,
+              onChanged: (value) {
+                print(value);
+                if (value.runtimeType != int) {
+                  _codeController.text = _codeController.text;
+                }
+              },
+            ),
+            SizedBox(height: 20),
+
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton(
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll(
+                    Color.fromRGBO(61, 218, 150, 1),
+                  ),
+                ),
+                onPressed: _isConnected ? _submitCode : null,
+                child: Text(_isConnected ? 'Verify' : 'Connecting...'),
+              ),
+            ),
+          ],
         ),
       ),
     );
