@@ -21,6 +21,7 @@ public class KestrelWebSocketServer
 {
     private IHost? _host;
     private WebSocket? _clientSocket;
+    private string? _clientCode;
     private readonly object _clientLock = new();
     private IEventSimulator simulation;
 
@@ -50,6 +51,15 @@ public class KestrelWebSocketServer
         {
             lock (_clientLock)
                 return _clientSocket != null && _clientSocket.State == WebSocketState.Open;
+        }
+    }
+
+    public string? ClientCode
+    {
+        get
+        {
+            lock (_clientLock)
+                return _clientCode;
         }
     }
 
@@ -142,14 +152,16 @@ public class KestrelWebSocketServer
             var ws = await context.WebSockets.AcceptWebSocketAsync();
 
             var code = RandomNumberGenerator.GetInt32(0, 10_000).ToString("D4", CultureInfo.InvariantCulture);
+            lock (_clientLock)
+            {
+                _clientSocket = ws;
+                _clientCode = code;
+            }
+            StatusChanged?.Invoke(Status());
 
             try
             {
-                var welcome = JsonSerializer.SerializeToUtf8Bytes(new
-                {
-                    server = "connected",
-                    code
-                });
+                var welcome = JsonSerializer.SerializeToUtf8Bytes(new { server = "connected" });
                 await ws.SendAsync(new ArraySegment<byte>(welcome), WebSocketMessageType.Text, true, CancellationToken.None);
             }
             catch (Exception ex)
@@ -157,11 +169,9 @@ public class KestrelWebSocketServer
                 Log?.Invoke("Failed to send welcome message: " + ex.Message);
             }
 
-            lock (_clientLock) { _clientSocket = ws; }
             Log?.Invoke("Client connected (Kestrel).");
-            StatusChanged?.Invoke(Status());
 
-            await HandleClientAsync(ws);
+            await HandleClientAsync(ws, code);
         }
         catch (Exception ex)
         {
@@ -174,15 +184,19 @@ public class KestrelWebSocketServer
 
 
 
-    private async Task HandleClientAsync(WebSocket socket)
+    private async Task HandleClientAsync(WebSocket socket, string code)
     {
         var buffer = new byte[4096];
+        var isAuthenticated = false;
+        var failedVerificationAttempts = 0;
+        using var verificationTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         try
         {
             while (socket.State == WebSocketState.Open)
             {
                 var seg = new ArraySegment<byte>(buffer);
-                var result = await socket.ReceiveAsync(seg, CancellationToken.None);
+                var receiveToken = isAuthenticated ? CancellationToken.None : verificationTimeout.Token;
+                var result = await socket.ReceiveAsync(seg, receiveToken);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     Log?.Invoke("Client requested close. Closing connection.");
@@ -194,7 +208,7 @@ public class KestrelWebSocketServer
                 sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 while (!result.EndOfMessage)
                 {
-                    result = await socket.ReceiveAsync(seg, CancellationToken.None);
+                    result = await socket.ReceiveAsync(seg, receiveToken);
                     sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 }
 
@@ -203,6 +217,36 @@ public class KestrelWebSocketServer
                 {
                     using var doc = JsonDocument.Parse(text);
                     var root = doc.RootElement;
+
+                    if (!isAuthenticated)
+                    {
+                        if (root.ValueKind == JsonValueKind.Object
+                            && root.TryGetProperty("type", out var authType)
+                            && authType.ValueKind == JsonValueKind.String
+                            && authType.GetString() == "verify"
+                            && root.TryGetProperty("code", out var providedCode)
+                            && providedCode.ValueKind == JsonValueKind.String
+                            && IsValidCode(code, providedCode.GetString()))
+                        {
+                            isAuthenticated = true;
+                            verificationTimeout.Cancel();
+                            var verified = JsonSerializer.SerializeToUtf8Bytes(new { server = "verified" });
+                            await socket.SendAsync(new ArraySegment<byte>(verified), WebSocketMessageType.Text, true, CancellationToken.None);
+                            Log?.Invoke("Client verified its session code.");
+                        }
+                        else
+                        {
+                            failedVerificationAttempts++;
+                            if (await RejectFailedVerificationAsync(socket, failedVerificationAttempts))
+                                break;
+                        }
+
+                        continue;
+                    }
+
+                    if (root.ValueKind != JsonValueKind.Object)
+                        continue;
+
                     if (root.TryGetProperty("type", out var typeElem) && typeElem.ValueKind == JsonValueKind.String)
                     {
                         switch (typeElem.GetString())
@@ -233,8 +277,19 @@ public class KestrelWebSocketServer
                 catch (JsonException)
                 {
                     Log?.Invoke("Received (non-JSON) message:\n" + text);
+                    if (!isAuthenticated)
+                    {
+                        failedVerificationAttempts++;
+                        if (await RejectFailedVerificationAsync(socket, failedVerificationAttempts))
+                            break;
+                    }
                 }
             }
+        }
+        catch (OperationCanceledException) when (!isAuthenticated)
+        {
+            Log?.Invoke("Client failed to verify within 10 minutes; disconnecting.");
+            socket.Abort();
         }
         catch (WebSocketException wex)
         {
@@ -245,11 +300,33 @@ public class KestrelWebSocketServer
             lock (_clientLock)
             {
                 if (_clientSocket == socket)
+                {
                     _clientSocket = null;
+                    _clientCode = null;
+                }
             }
             Log?.Invoke("Client disconnected.");
             StatusChanged?.Invoke(Status());
         }
+    }
+
+    private async Task<bool> RejectFailedVerificationAsync(WebSocket socket, int attempts)
+    {
+        Log?.Invoke($"Client verification failed ({attempts}/3).");
+        if (attempts < 3)
+            return false;
+
+        Log?.Invoke("Client exceeded three failed verification attempts; disconnecting.");
+        if (socket.State == WebSocketState.Open)
+            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Too many incorrect pairing codes", CancellationToken.None);
+        return true;
+    }
+
+    private static bool IsValidCode(string expectedCode, string? providedCode)
+    {
+        return providedCode != null && CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(expectedCode),
+            Encoding.UTF8.GetBytes(providedCode));
     }
 
     private static bool TryParseMouseButton(string? value, out MouseButton button)
@@ -302,7 +379,14 @@ public class KestrelWebSocketServer
         }
         finally
         {
-            lock (_clientLock) { _clientSocket = null; }
+            lock (_clientLock)
+            {
+                if (_clientSocket == s)
+                {
+                    _clientSocket = null;
+                    _clientCode = null;
+                }
+            }
             StatusChanged?.Invoke(Status());
         }
     }
@@ -315,6 +399,8 @@ public class KestrelWebSocketServer
         try { await _host.StopAsync(); } catch { }
         _host.Dispose();
         _host = null;
+        lock (_clientLock)
+            _clientCode = null;
         StatusChanged?.Invoke(Status());
         Log?.Invoke("Kestrel server stopped.");
     }

@@ -62,10 +62,14 @@ public partial class MainWindow : Window
     {
         var isRunning = _server?.IsRunning == true;
         var isClientConnected = _server?.IsClientConnected == true;
+        var clientCode = isClientConnected ? _server?.ClientCode : null;
 
         ServerStatusText.Text = isRunning ? "Server open" : "Server closed";
         ServerHintText.Text = isRunning ? "Tap to close the server" : "Tap to open the server";
         ClientStatusText.Text = isClientConnected ? "Client connected" : "No client connected";
+        ClientCodeLabel.IsVisible = clientCode != null;
+        ClientCodeText.IsVisible = clientCode != null;
+        ClientCodeText.Text = clientCode ?? string.Empty;
 
         ServerIndicator.Classes.Remove("offline");
         ServerIndicator.Classes.Remove("online");

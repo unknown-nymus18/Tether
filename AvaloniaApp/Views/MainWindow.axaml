@@ -71,6 +71,8 @@
         <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="15">
             <Button Name="ServerToggleButton" Classes="server-toggle stopped" Content="START" />
             <TextBlock Name="ServerHintText" Text="Tap to open the server" FontFamily="Inter" FontSize="13" Foreground="#68756D" HorizontalAlignment="Center" />
+            <TextBlock Name="ClientCodeLabel" Text="Pairing code" FontFamily="Inter" FontSize="13" Foreground="#68756D" HorizontalAlignment="Center" IsVisible="False" />
+            <TextBlock Name="ClientCodeText" FontFamily="Consolas" FontSize="28" FontWeight="Bold" Foreground="#26332D" HorizontalAlignment="Center" IsVisible="False" />
         </StackPanel>
 
         <Grid Grid.Row="2" ColumnDefinitions="11,Auto,*" VerticalAlignment="Center">
