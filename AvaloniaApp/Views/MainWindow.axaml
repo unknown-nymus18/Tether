@@ -1,0 +1,83 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AvaloniaApp.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="AvaloniaApp.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Tether"
+        Width="440"
+        Height="360"
+        MinWidth="380"
+        MinHeight="320"
+        Background="#F2F5F1">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.status-label">
+            <Setter Property="FontFamily" Value="Inter" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#26332D" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.indicator">
+            <Setter Property="Width" Value="11" />
+            <Setter Property="Height" Value="11" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.indicator.offline">
+            <Setter Property="Background" Value="#B9C2BC" />
+        </Style>
+        <Style Selector="Border.indicator.online">
+            <Setter Property="Background" Value="#16845B" />
+        </Style>
+        <Style Selector="Button.server-toggle">
+            <Setter Property="Width" Value="116" />
+            <Setter Property="Height" Value="116" />
+            <Setter Property="CornerRadius" Value="58" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontFamily" Value="Inter" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.server-toggle.stopped">
+            <Setter Property="Background" Value="#16845B" />
+        </Style>
+        <Style Selector="Button.server-toggle.running">
+            <Setter Property="Background" Value="#C34A3C" />
+        </Style>
+        <Style Selector="Button.server-toggle:pointerover">
+            <!-- <Setter Property="Opacity" Value="0.4" /> -->
+        </Style>
+        <Style Selector="Button.server-toggle:pressed">
+            <Setter Property="Opacity" Value="0.76" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="32,26">
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Border Classes="indicator offline" Name="ServerIndicator" />
+                <TextBlock Name="ServerStatusText" Classes="status-label" FontWeight="SemiBold" Text="Server stopped" />
+            </StackPanel>
+            <TextBlock Name="ServerUrlText" Margin="21,0,0,0" FontFamily="Inter" FontSize="12" Foreground="#68756D" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="15">
+            <Button Name="ServerToggleButton" Classes="server-toggle stopped" Content="START" />
+            <TextBlock Name="ServerHintText" Text="Tap to open the server" FontFamily="Inter" FontSize="13" Foreground="#68756D" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <Grid Grid.Row="2" ColumnDefinitions="11,Auto,*" VerticalAlignment="Center">
+            <Border Classes="indicator offline" Name="ClientIndicator" />
+            <TextBlock Grid.Column="1" Name="ClientStatusText" Classes="status-label" Margin="10,0,0,0" Foreground="#68756D" Text="No client connected" />
+            <TextBlock Grid.Column="2" Name="FeedbackText" Margin="12,0,0,0" FontFamily="Inter" FontSize="12" Foreground="#A33B32" VerticalAlignment="Center" HorizontalAlignment="Right" TextWrapping="Wrap" />
+        </Grid>
+    </Grid>
+
+</Window>
