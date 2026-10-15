@@ -1,8 +1,16 @@
 import 'package:Tether/Pages/home_page.dart';
+import 'package:Tether/Pages/settings_page.dart';
+import 'package:Tether/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -10,10 +18,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData.dark(),
-      debugShowCheckedModeBanner: false,
-      home: HomePage(),
+    return Consumer<ThemeProvider>(
+      builder: (context, value, child) => MaterialApp(
+        theme: value.isDark
+            ? ThemeData.dark(useMaterial3: true)
+            : ThemeData.light(),
+        debugShowCheckedModeBanner: false,
+        home: SettingsPage(),
+      ),
     );
   }
 }
